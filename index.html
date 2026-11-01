@@ -61,6 +61,18 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .topic .r span{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums;flex:none}
 .topic .seg{height:6px}
 .res.pass .score,.res.pass .lbl{color:var(--ok)} .res.fail .score,.res.fail .lbl{color:var(--bad)}
+.selbox{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.selbox .sech{margin:0 0 4px}
+.selq{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+.selq button{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:20px;padding:6px 12px;font-size:13.5px;font-weight:600}
+.sets{display:grid;gap:6px}
+.setc{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--bg);color:var(--ink);border:1.5px solid transparent;border-radius:10px;padding:10px 12px;font-size:14.5px}
+.setc b{flex:1;font-weight:600}
+.setc>span:last-child{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.setc .bx{flex:none;width:20px;height:20px;border-radius:5px;border:1.5px solid var(--mute);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+.setc[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.setc[aria-pressed="true"] .bx{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.setc[aria-pressed="true"] .bx::after{content:"✓"}
 .hero h1{margin:4px 0 0;font-size:24px;font-weight:800;text-wrap:balance;line-height:1.25}
 .prog{background:var(--surface);border-radius:16px;padding:18px;margin-top:-46px;box-shadow:0 6px 20px rgba(16,40,80,.10);display:grid;gap:12px}
 .prog .big{display:flex;align-items:baseline;gap:8px}
@@ -193,6 +205,12 @@ details.cfg[open] summary::after{content:"−"}
     </div>
   </div>
 
+  <div class="selbox hide" id="vhSel">
+    <div class="sech"><h2>Tài liệu ôn</h2><span id="selSum"></span></div>
+    <div class="selq"><button id="selC3">Cấp 4: chỉ Chương 3</button><button id="selAll">Chọn tất cả</button></div>
+    <div class="sets" id="sets"></div>
+  </div>
+
   <div class="actions">
     <button class="act primary" id="aSeq"><span class="ic">▶</span><span class="tx"><b>Học lần lượt</b><span id="aSeqSub">Bắt đầu từ câu 1</span></span><span class="go">›</span></button>
     <button class="act" id="aNew"><span class="ic">?</span><span class="tx"><b>Học câu chưa thuộc</b><span id="aNewSub"></span></span><span class="go">›</span></button>
@@ -294,51 +312,71 @@ const $ = id => document.getElementById(id);
 const BANKS = {
   lms: { data:LMS, key:"lms_v2", small:"Sun Group · Bài thi Chuyên môn", title:"Ôn thi Chuyên môn LMS", freq:true, exam:{num:30,min:30},
     scopes:[["LMS","80 câu đề LMS"],["BS","44 câu bổ sung"]] },
-  vh: { data:VH, key:"vh_v1", small:"Sun Group · Văn hóa doanh nghiệp 2026", title:"Ôn tập Văn hóa – Nghị quyết 126", freq:false, exam:{num:50,min:30}, pass:0.9,
-    scopes:VH_SETS.map(s => [s.k, s.name + " (" + VH.filter(q => q.p === s.k).length + " câu)"]) }
+  vh: { data:VH, key:"vh_v1", small:"Sun Group · Văn hóa doanh nghiệp 2026", title:"Ôn tập Văn hóa – Nghị quyết 126", freq:false, exam:{num:50,min:30}, pass:0.9 }
 };
-let B, DATA, P;
+const setCount = k => VH.filter(q => q.p === k).length;
+let B, DATA, P, DECKS = [];
 function loadBank(id){
-  B = BANKS[id] || BANKS.lms; DATA = B.data;
-  P = { st:{}, pos:0, exam:Object.assign({}, B.exam), de:{} };
+  B = BANKS[id] || BANKS.lms;
+  P = { st:{}, pos:0, exam:Object.assign({}, B.exam), dk:{} };
   try {
     const raw = localStorage.getItem(B.key);
     if (raw) { P = Object.assign(P, JSON.parse(raw)); if (B.pass && !P.v) { P.exam = Object.assign({}, B.exam); P.v = 1; } }
     else if (B === BANKS.lms) { const old = JSON.parse(localStorage.getItem("lms_wrong") || "[]"); old.forEach(n => P.st[n] = 0); }
     localStorage.setItem("lms_bank", id);
   } catch(e) {}
+  if (B.pass) { if (P.de) { P.dk[VH_SETS.map(s => s.k).sort().join("|")] = P.de; delete P.de; }
+    if (!Array.isArray(P.sel) || !P.sel.length) P.sel = VH_SETS.map(s => s.k); }
   document.querySelectorAll("#bank button").forEach(b => b.setAttribute("aria-selected", BANKS[b.dataset.b] === B));
   $("hSmall").textContent = B.small; $("hTitle").textContent = B.title;
-  const T = DATA.length;
-  $("cScope").innerHTML = '<option value="all">Toàn bộ ' + T + ' câu</option>' + B.scopes.map(([v,t]) => '<option value="' + v + '">' + t + '</option>').join("") +
-    '<option value="wrong">Câu đang sai</option><option value="new">Câu chưa thuộc</option>';
   $("cOrder").querySelector('[value="freq"]').hidden = !B.freq; if (!B.freq && $("cOrder").value === "freq") $("cOrder").value = "seq";
-  ["cNum","eNum"].forEach(id => $(id).max = T); $("cNum").value = T;
+  applySel();
 }
+/* phần Văn hóa chỉ dùng các chương/bộ đang chọn; LMS dùng toàn bộ */
+function applySel(){
+  const sets = B.pass ? VH_SETS.filter(s => P.sel.includes(s.k)) : [];
+  DATA = B.pass ? VH.filter(q => P.sel.includes(q.p)) : B.data;
+  const scopes = B.pass ? (sets.length > 1 ? sets.map(s => [s.k, s.name + " (" + setCount(s.k) + " câu)"]) : []) : B.scopes;
+  const T = DATA.length;
+  $("cScope").innerHTML = '<option value="all">Toàn bộ ' + T + ' câu</option>' + scopes.map(([v,t]) => '<option value="' + v + '">' + t + '</option>').join("") +
+    '<option value="wrong">Câu đang sai</option><option value="new">Câu chưa thuộc</option>';
+  ["cNum","eNum"].forEach(id => $(id).max = T); $("cNum").value = T;
+  if (B.pass) { const f = mixSets(sets, false), m = Math.min(B.exam.num, f.length), n = Math.ceil(f.length / m);
+    DECKS = Array.from({length:n}, (_, k) => Array.from({length:m}, (_, j) => f[(k * m + j) % f.length])); }
+}
+const selKey = () => P.sel.slice().sort().join("|");
 document.querySelectorAll("#bank button").forEach(b => b.onclick = () => { loadBank(b.dataset.b); renderHome(); });
+function setSel(list){ P.sel = VH_SETS.map(s => s.k).filter(k => list.includes(k)); P.pos = 0; save(); applySel(); renderHome(); }
+$("selAll").onclick = () => setSel(VH_SETS.map(s => s.k));
+$("selC3").onclick = () => setSel(["Chương 3"]);
 
 /* ---- bộ đề kiểu thi lái xe: trộn câu các chủ đề theo tỉ lệ, cắt thành đề cố định 50 câu ---- */
-function mixSets(shuf){
+function mixSets(sets, shuf){
   const out = [];
-  VH_SETS.forEach(s => { const g = VH.filter(q => q.p === s.k); if (shuf) shuffle(g); g.forEach((q, i) => out.push([(i + .5) / g.length, q])); });
+  sets.forEach(s => { const g = VH.filter(q => q.p === s.k); if (shuf) shuffle(g); g.forEach((q, i) => out.push([(i + .5) / g.length, q])); });
   return out.sort((a, b) => a[0] - b[0]).map(x => x[1]);
 }
-const DECK_N = BANKS.vh.exam.num;
-const DECKS = (() => { const f = mixSets(false), n = Math.ceil(f.length / DECK_N);
-  return Array.from({length:n}, (_, k) => Array.from({length:DECK_N}, (_, j) => f[(k * DECK_N + j) % f.length])); })();
 const need = n => Math.ceil(n * B.pass);
 function renderVH(){
-  $("vhBox").classList.toggle("hide", B !== BANKS.vh);
+  $("vhBox").classList.toggle("hide", B !== BANKS.vh); $("vhSel").classList.toggle("hide", B !== BANKS.vh);
   if (B !== BANKS.vh) return;
-  const box = $("decks"); box.innerHTML = ""; let passed = 0;
-  DECKS.forEach((d, k) => { const r = P.de[k + 1], b = document.createElement("button");
+  const sb = $("sets"); sb.innerHTML = "";
+  VH_SETS.forEach(s => { const on = P.sel.includes(s.k), b = document.createElement("button");
+    b.className = "setc"; b.setAttribute("aria-pressed", on);
+    b.innerHTML = '<span class="bx" aria-hidden="true"></span><b></b><span>' + setCount(s.k) + ' câu</span>'; b.querySelector("b").textContent = s.name;
+    b.onclick = () => { if (on && P.sel.length === 1) return; setSel(on ? P.sel.filter(k => k !== s.k) : P.sel.concat(s.k)); };
+    sb.appendChild(b); });
+  $("selSum").textContent = "Đang ôn " + P.sel.length + "/" + VH_SETS.length + " bộ · " + DATA.length + " câu";
+  const res = P.dk[selKey()] || {}, box = $("decks"); box.innerHTML = ""; let passed = 0;
+  DECKS.forEach((d, k) => { const r = res[k + 1], b = document.createElement("button");
     b.className = "deck" + (r ? (r.pass ? " pass" : " fail") : ""); if (r && r.pass) passed++;
     b.innerHTML = "<b>Đề " + (k + 1) + "</b><span>" + (r ? (r.pass ? "Đạt " : "Trượt ") + r.ok + "/" + r.n : "Chưa làm") + "</span>";
     b.onclick = () => start({ mode:"exam", list:d, order:"seq", shuf:true, num:d.length, min:B.exam.min, deck:k + 1, full:true });
     box.appendChild(b); });
-  $("deckSum").textContent = "Đạt " + passed + "/" + DECKS.length + " đề · cần đúng " + need(DECK_N) + "/" + DECK_N;
+  const m = DECKS[0].length;
+  $("deckSum").textContent = "Đạt " + passed + "/" + DECKS.length + " đề · cần đúng " + need(m) + "/" + m;
   const tp = $("topics"); tp.innerHTML = "";
-  VH_SETS.forEach(s => { const g = VH.filter(q => q.p === s.k), k = g.filter(q => P.st[q.n] === 1).length, w = g.filter(q => P.st[q.n] === 0).length;
+  VH_SETS.filter(s => P.sel.includes(s.k)).forEach(s => { const g = VH.filter(q => q.p === s.k), k = g.filter(q => P.st[q.n] === 1).length, w = g.filter(q => P.st[q.n] === 0).length;
     const b = document.createElement("button"); b.className = "topic";
     b.innerHTML = '<div class="r"><b></b><span>' + k + "/" + g.length + ' thuộc</span></div><div class="seg"><i style="background:var(--ok);width:' + (k / g.length * 100) + '%"></i><i style="background:var(--bad);width:' + (w / g.length * 100) + '%"></i></div>';
     b.querySelector("b").textContent = s.name;
@@ -365,8 +403,8 @@ function renderHome(){
   $("aWrong").disabled = !w;
   $("eNum").value = P.exam.num; $("eMin").value = P.exam.min;
   $("aExamT").textContent = B.pass ? "Thi thử đề ngẫu nhiên" : "Thi thử";
-  $("aExamSub").textContent = P.exam.num + " câu ngẫu nhiên" + (P.exam.min > 0 ? " · " + P.exam.min + " phút" : " · không giới hạn giờ") +
-    (B.pass ? " · đúng từ " + need(P.exam.num) + " câu là đạt" : " · chấm điểm thang 10");
+  $("aExamSub").textContent = Math.min(P.exam.num, DATA.length) + " câu ngẫu nhiên" + (P.exam.min > 0 ? " · " + P.exam.min + " phút" : " · không giới hạn giờ") +
+    (B.pass ? " · đúng từ " + need(Math.min(P.exam.num, DATA.length)) + " câu là đạt" : " · chấm điểm thang 10");
   $("hMsg").classList.add("hide");
   renderVH();
 }
@@ -383,7 +421,7 @@ $("cReset").onclick = () => {
   $("cReset").dataset.arm = 1; $("cReset").textContent = "Bấm lần nữa để xác nhận xóa";
 };
 function pool(s){
-  if (B.scopes.some(([v]) => v === s)) return DATA.filter(q => q.p === s);
+  if (DATA.some(q => q.p === s)) return DATA.filter(q => q.p === s);
   if (s === "wrong") return wrong(); if (s === "new") return notKnown();
   return DATA.slice();
 }
@@ -487,7 +525,7 @@ function finish(){
     const pass = ok >= need(n); res.classList.add(pass ? "pass" : "fail");
     $("rScore").innerHTML = ok + "<small>/" + n + "</small>";
     $("rLbl").textContent = (pass ? "ĐẠT" : "KHÔNG ĐẠT") + " · cần đúng " + need(n) + "/" + n + (S.deck ? " · Đề " + S.deck : "");
-    if (S.deck) { P.de[S.deck] = { ok, n, pass }; save(); }
+    if (S.deck) { const key = selKey(); P.dk[key] = P.dk[key] || {}; P.dk[key][S.deck] = { ok, n, pass }; save(); }
   } else {
     $("rScore").innerHTML = sc.toFixed(1).replace(".", ",") + "<small>/10</small>";
     $("rLbl").textContent = sc >= 9 ? "Xuất sắc, sẵn sàng đi thi" : sc >= 8 ? "Tốt, ôn thêm vài câu sai là ổn" : sc >= 5 ? "Đạt, cần ôn lại các câu sai" : "Cần ôn thêm";
@@ -521,7 +559,7 @@ $("rWrong").onclick = () => { const list = S.items.filter(it => !isOk(it)).map(i
 $("aSeq").onclick = () => start({ mode:"learn", scope:"all", order:"seq", shuf:true, seq:true, startAt: P.pos < DATA.length ? P.pos : 0 });
 $("aNew").onclick = () => start({ mode:"learn", scope:"new", order:"rand", shuf:true });
 $("aWrong").onclick = () => start({ mode:"learn", scope:"wrong", order:"rand", shuf:true });
-$("aExam").onclick = () => B.pass ? start({ mode:"exam", list:mixSets(true), order:"seq", shuf:true, num:P.exam.num, min:P.exam.min, full:true })
+$("aExam").onclick = () => B.pass ? start({ mode:"exam", list:mixSets(VH_SETS.filter(s => P.sel.includes(s.k)), true), order:"seq", shuf:true, num:P.exam.num, min:P.exam.min, full:true })
   : start({ mode:"exam", scope:"all", order:"rand", shuf:true, num:P.exam.num, min:P.exam.min });
 $("cStart").onclick = () => start({ mode:cMode, scope:$("cScope").value, order:$("cOrder").value, shuf:$("cShuf").checked, num:+$("cNum").value, min:+$("cMin").value });
 
