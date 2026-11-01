@@ -46,6 +46,21 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .note2{font-size:13.5px;margin-top:12px;padding:10px 12px;border-radius:10px;background:#fdf1d8;color:#6b4600}
 :root[data-theme="dark"] .note2{background:#3a2d12;color:var(--gold)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .note2{background:#3a2d12;color:var(--gold)}}
+.sech{display:flex;justify-content:space-between;align-items:baseline;margin:24px 0 10px}
+.sech h2{font-size:17px;margin:0}
+.sech span{font-size:13px;color:var(--mute)}
+.decks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.deck{background:var(--surface);color:var(--ink);border:1.5px solid var(--line);border-radius:12px;padding:12px 6px;text-align:center;display:grid;gap:2px}
+.deck b{font-size:16px}
+.deck span{font-size:12.5px;color:var(--mute);font-variant-numeric:tabular-nums}
+.deck.pass{border-color:var(--ok);background:var(--ok-soft)} .deck.pass span{color:var(--ok);font-weight:700}
+.deck.fail{border-color:var(--bad);background:var(--bad-soft)} .deck.fail span{color:var(--bad);font-weight:700}
+.topics{display:grid;gap:8px}
+.topic{display:grid;gap:7px;width:100%;text-align:left;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px}
+.topic .r{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.topic .r span{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums;flex:none}
+.topic .seg{height:6px}
+.res.pass .score,.res.pass .lbl{color:var(--ok)} .res.fail .score,.res.fail .lbl{color:var(--bad)}
 .hero h1{margin:4px 0 0;font-size:24px;font-weight:800;text-wrap:balance;line-height:1.25}
 .prog{background:var(--surface);border-radius:16px;padding:18px;margin-top:-46px;box-shadow:0 6px 20px rgba(16,40,80,.10);display:grid;gap:12px}
 .prog .big{display:flex;align-items:baseline;gap:8px}
@@ -182,9 +197,16 @@ details.cfg[open] summary::after{content:"−"}
     <button class="act primary" id="aSeq"><span class="ic">▶</span><span class="tx"><b>Học lần lượt</b><span id="aSeqSub">Bắt đầu từ câu 1</span></span><span class="go">›</span></button>
     <button class="act" id="aNew"><span class="ic">?</span><span class="tx"><b>Học câu chưa thuộc</b><span id="aNewSub"></span></span><span class="go">›</span></button>
     <button class="act" id="aWrong"><span class="ic" style="background:var(--bad-soft);color:var(--bad)">!</span><span class="tx"><b>Ôn lại câu sai</b><span id="aWrongSub"></span></span><span class="go">›</span></button>
-    <button class="act" id="aExam"><span class="ic" style="background:#fdf1d8;color:#8a5a00">⏱</span><span class="tx"><b>Thi thử</b><span id="aExamSub"></span></span><span class="go">›</span></button>
+    <button class="act" id="aExam"><span class="ic" style="background:#fdf1d8;color:#8a5a00">⏱</span><span class="tx"><b id="aExamT">Thi thử</b><span id="aExamSub"></span></span><span class="go">›</span></button>
   </div>
   <div class="msg hide" id="hMsg"></div>
+
+  <div id="vhBox" class="hide">
+    <div class="sech"><h2>Bộ đề thi</h2><span id="deckSum"></span></div>
+    <div class="decks" id="decks"></div>
+    <div class="sech"><h2>Ôn theo chủ đề</h2></div>
+    <div class="topics" id="topics"></div>
+  </div>
 
   <details class="cfg">
     <summary>Tùy chỉnh</summary>
@@ -270,18 +292,18 @@ const L = "ABCD";
 const $ = id => document.getElementById(id);
 /* ---- hai bộ đề: mỗi bộ có dữ liệu, phạm vi và tiến độ riêng ---- */
 const BANKS = {
-  lms: { data:LMS, key:"lms_v2", small:"Sun Group · Bài thi Chuyên môn", title:"Ôn thi Chuyên môn LMS", freq:true,
+  lms: { data:LMS, key:"lms_v2", small:"Sun Group · Bài thi Chuyên môn", title:"Ôn thi Chuyên môn LMS", freq:true, exam:{num:30,min:30},
     scopes:[["LMS","80 câu đề LMS"],["BS","44 câu bổ sung"]] },
-  vh: { data:VH, key:"vh_v1", small:"Sun Group · Văn hóa doanh nghiệp 2026", title:"Ôn tập Văn hóa – Nghị quyết 126", freq:false,
+  vh: { data:VH, key:"vh_v1", small:"Sun Group · Văn hóa doanh nghiệp 2026", title:"Ôn tập Văn hóa – Nghị quyết 126", freq:false, exam:{num:50,min:30}, pass:0.9,
     scopes:VH_SETS.map(s => [s.k, s.name + " (" + VH.filter(q => q.p === s.k).length + " câu)"]) }
 };
 let B, DATA, P;
 function loadBank(id){
   B = BANKS[id] || BANKS.lms; DATA = B.data;
-  P = { st:{}, pos:0, exam:{num:30,min:30} };
+  P = { st:{}, pos:0, exam:Object.assign({}, B.exam), de:{} };
   try {
     const raw = localStorage.getItem(B.key);
-    if (raw) P = Object.assign(P, JSON.parse(raw));
+    if (raw) { P = Object.assign(P, JSON.parse(raw)); if (B.pass && !P.v) { P.exam = Object.assign({}, B.exam); P.v = 1; } }
     else if (B === BANKS.lms) { const old = JSON.parse(localStorage.getItem("lms_wrong") || "[]"); old.forEach(n => P.st[n] = 0); }
     localStorage.setItem("lms_bank", id);
   } catch(e) {}
@@ -294,6 +316,35 @@ function loadBank(id){
   ["cNum","eNum"].forEach(id => $(id).max = T); $("cNum").value = T;
 }
 document.querySelectorAll("#bank button").forEach(b => b.onclick = () => { loadBank(b.dataset.b); renderHome(); });
+
+/* ---- bộ đề kiểu thi lái xe: trộn câu các chủ đề theo tỉ lệ, cắt thành đề cố định 50 câu ---- */
+function mixSets(shuf){
+  const out = [];
+  VH_SETS.forEach(s => { const g = VH.filter(q => q.p === s.k); if (shuf) shuffle(g); g.forEach((q, i) => out.push([(i + .5) / g.length, q])); });
+  return out.sort((a, b) => a[0] - b[0]).map(x => x[1]);
+}
+const DECK_N = BANKS.vh.exam.num;
+const DECKS = (() => { const f = mixSets(false), n = Math.ceil(f.length / DECK_N);
+  return Array.from({length:n}, (_, k) => Array.from({length:DECK_N}, (_, j) => f[(k * DECK_N + j) % f.length])); })();
+const need = n => Math.ceil(n * B.pass);
+function renderVH(){
+  $("vhBox").classList.toggle("hide", B !== BANKS.vh);
+  if (B !== BANKS.vh) return;
+  const box = $("decks"); box.innerHTML = ""; let passed = 0;
+  DECKS.forEach((d, k) => { const r = P.de[k + 1], b = document.createElement("button");
+    b.className = "deck" + (r ? (r.pass ? " pass" : " fail") : ""); if (r && r.pass) passed++;
+    b.innerHTML = "<b>Đề " + (k + 1) + "</b><span>" + (r ? (r.pass ? "Đạt " : "Trượt ") + r.ok + "/" + r.n : "Chưa làm") + "</span>";
+    b.onclick = () => start({ mode:"exam", list:d, order:"seq", shuf:true, num:d.length, min:B.exam.min, deck:k + 1, full:true });
+    box.appendChild(b); });
+  $("deckSum").textContent = "Đạt " + passed + "/" + DECKS.length + " đề · cần đúng " + need(DECK_N) + "/" + DECK_N;
+  const tp = $("topics"); tp.innerHTML = "";
+  VH_SETS.forEach(s => { const g = VH.filter(q => q.p === s.k), k = g.filter(q => P.st[q.n] === 1).length, w = g.filter(q => P.st[q.n] === 0).length;
+    const b = document.createElement("button"); b.className = "topic";
+    b.innerHTML = '<div class="r"><b></b><span>' + k + "/" + g.length + ' thuộc</span></div><div class="seg"><i style="background:var(--ok);width:' + (k / g.length * 100) + '%"></i><i style="background:var(--bad);width:' + (w / g.length * 100) + '%"></i></div>';
+    b.querySelector("b").textContent = s.name;
+    b.onclick = () => start({ mode:"learn", scope:s.k, order:"seq", shuf:true });
+    tp.appendChild(b); });
+}
 function save(){ try { localStorage.setItem(B.key, JSON.stringify(P)); } catch(e) {} }
 function mark(n, ok){ P.st[n] = ok ? 1 : 0; save(); }
 const known = () => DATA.filter(q => P.st[q.n] === 1);
@@ -313,8 +364,11 @@ function renderHome(){
   $("aWrongSub").textContent = w ? w + " câu đang làm sai" : "Chưa có câu sai";
   $("aWrong").disabled = !w;
   $("eNum").value = P.exam.num; $("eMin").value = P.exam.min;
-  $("aExamSub").textContent = P.exam.num + " câu ngẫu nhiên" + (P.exam.min > 0 ? " · " + P.exam.min + " phút" : " · không giới hạn giờ") + " · chấm điểm thang 10";
+  $("aExamT").textContent = B.pass ? "Thi thử đề ngẫu nhiên" : "Thi thử";
+  $("aExamSub").textContent = P.exam.num + " câu ngẫu nhiên" + (P.exam.min > 0 ? " · " + P.exam.min + " phút" : " · không giới hạn giờ") +
+    (B.pass ? " · đúng từ " + need(P.exam.num) + " câu là đạt" : " · chấm điểm thang 10");
   $("hMsg").classList.add("hide");
+  renderVH();
 }
 
 /* ---- tùy chỉnh ---- */
@@ -343,7 +397,7 @@ function start(cfg){
   if (!qs.length) { $("hMsg").textContent = "Không có câu nào trong phạm vi đã chọn."; $("hMsg").classList.remove("hide"); show("home"); return; }
   if (cfg.order === "rand") shuffle(qs); else if (cfg.order === "freq") qs.sort((a,b) => b.f - a.f || a.n - b.n);
   qs = qs.slice(0, Math.max(1, Math.min(cfg.num || qs.length, qs.length)));
-  S = { mode:cfg.mode, seq:!!cfg.seq, i:cfg.startAt || 0, items: qs.map(q => { const idx=[0,1,2,3].slice(0,q.o.length); if (cfg.shuf) shuffle(idx); return { q, idx, pick:null }; }) };
+  S = { mode:cfg.mode, seq:!!cfg.seq, deck:cfg.deck || 0, full:!!cfg.full, i:cfg.startAt || 0, items: qs.map(q => { const idx=[0,1,2,3].slice(0,q.o.length); if (cfg.shuf) shuffle(idx); return { q, idx, pick:null }; }) };
   clearInterval(tick); $("qTime").classList.add("hide");
   if (S.mode === "exam" && cfg.min > 0) {
     S.end = Date.now() + cfg.min*60000; $("qTime").classList.remove("hide");
@@ -427,9 +481,17 @@ function finish(){
   if (S.mode === "exam") S.items.forEach(it => { if (it.pick !== null) mark(it.q.n, isOk(it)); });
   if (S.seq && S.i === S.items.length-1) { P.pos = 0; save(); }
   const n = S.items.length, ok = S.items.filter(isOk).length, done = S.items.filter(x => x.pick !== null).length;
-  const sc = ok/n*10;
-  $("rScore").innerHTML = sc.toFixed(1).replace(".", ",") + "<small>/10</small>";
-  $("rLbl").textContent = sc >= 9 ? "Xuất sắc, sẵn sàng đi thi" : sc >= 8 ? "Tốt, ôn thêm vài câu sai là ổn" : sc >= 5 ? "Đạt, cần ôn lại các câu sai" : "Cần ôn thêm";
+  const sc = ok/n*10, res = document.querySelector("#result .res");
+  res.classList.remove("pass", "fail");
+  if (B.pass && S.full) {
+    const pass = ok >= need(n); res.classList.add(pass ? "pass" : "fail");
+    $("rScore").innerHTML = ok + "<small>/" + n + "</small>";
+    $("rLbl").textContent = (pass ? "ĐẠT" : "KHÔNG ĐẠT") + " · cần đúng " + need(n) + "/" + n + (S.deck ? " · Đề " + S.deck : "");
+    if (S.deck) { P.de[S.deck] = { ok, n, pass }; save(); }
+  } else {
+    $("rScore").innerHTML = sc.toFixed(1).replace(".", ",") + "<small>/10</small>";
+    $("rLbl").textContent = sc >= 9 ? "Xuất sắc, sẵn sàng đi thi" : sc >= 8 ? "Tốt, ôn thêm vài câu sai là ổn" : sc >= 5 ? "Đạt, cần ôn lại các câu sai" : "Cần ôn thêm";
+  }
   $("rOk").textContent = ok; $("rBad").textContent = done - ok; $("rSkip").textContent = n - done;
   $("rWrong").disabled = ok === n;
   renderReview(); show("result");
@@ -453,13 +515,14 @@ function renderReview(){
 $("rOnly").onchange = renderReview;
 $("rAgain").onclick = () => start(last);
 $("rHome").onclick = () => { renderHome(); show("home"); };
-$("rWrong").onclick = () => { const list = S.items.filter(it => !isOk(it)).map(it => it.q); if (list.length) start(Object.assign({}, last, { list, num:list.length, order:"rand", seq:false, startAt:0 })); };
+$("rWrong").onclick = () => { const list = S.items.filter(it => !isOk(it)).map(it => it.q); if (list.length) start(Object.assign({}, last, { list, num:list.length, order:"rand", seq:false, startAt:0, deck:0, full:false })); };
 
 /* ---- lối vào ---- */
 $("aSeq").onclick = () => start({ mode:"learn", scope:"all", order:"seq", shuf:true, seq:true, startAt: P.pos < DATA.length ? P.pos : 0 });
 $("aNew").onclick = () => start({ mode:"learn", scope:"new", order:"rand", shuf:true });
 $("aWrong").onclick = () => start({ mode:"learn", scope:"wrong", order:"rand", shuf:true });
-$("aExam").onclick = () => start({ mode:"exam", scope:"all", order:"rand", shuf:true, num:P.exam.num, min:P.exam.min });
+$("aExam").onclick = () => B.pass ? start({ mode:"exam", list:mixSets(true), order:"seq", shuf:true, num:P.exam.num, min:P.exam.min, full:true })
+  : start({ mode:"exam", scope:"all", order:"rand", shuf:true, num:P.exam.num, min:P.exam.min });
 $("cStart").onclick = () => start({ mode:cMode, scope:$("cScope").value, order:$("cOrder").value, shuf:$("cShuf").checked, num:+$("cNum").value, min:+$("cMin").value });
 
 let b0 = "lms"; try { b0 = localStorage.getItem("lms_bank") || "lms"; } catch(e) {}
