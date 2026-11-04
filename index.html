@@ -82,6 +82,16 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .cg p{margin:0;font-size:14px;line-height:1.5;white-space:pre-wrap}
 .cg p b{color:var(--accent)}
 .cbtn{justify-self:start;background:none;border:1px dashed var(--accent);color:var(--accent);border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600}
+.cn{display:grid;gap:5px}
+.cv{display:flex;gap:6px;flex-wrap:wrap}
+.cv button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:16px;padding:4px 11px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.cv button.on.up{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.cv button.on.dn{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.cv button:disabled{opacity:.6}
+.cg.mine{box-shadow:inset 0 0 0 2px var(--gold)}
+.tagme{display:inline-block;background:var(--gold);color:#2a1a00;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700;margin-left:4px}
+.ans .who{display:block;width:fit-content;margin-top:6px;font-size:12.5px;font-weight:600;line-height:1.4;color:var(--accent);background:var(--accent-soft);border-radius:8px;padding:3px 8px}
+.ans .who.same{background:var(--gold);color:#2a1a00}
 .cform{display:grid;gap:8px;background:var(--bg);border-radius:10px;padding:12px}
 .cform label.r{display:flex;gap:8px;align-items:flex-start;font-size:14px}
 .cform label.r input{margin-top:3px;accent-color:var(--accent)}
@@ -496,13 +506,40 @@ const isOk = it => it.pick !== null && it.q.a.includes(it.idx[it.pick]);
 /* ---- góp ý đáp án: dùng chung cho mọi người, lưu trên máy chủ BrewQuiz ---- */
 const NOTE_API = new URLSearchParams(location.search).get("api") || "https://brewquiz.vercel.app/api/lms";
 let NOTES = {}, notesState = "";
+const VID = (() => { try {
+  let v = localStorage.getItem("lms_vid");
+  if (!v) { v = Array.from(crypto.getRandomValues(new Uint8Array(12)), x => x.toString(36).padStart(2, "0")).join(""); localStorage.setItem("lms_vid", v); }
+  return v; } catch(e) { return ""; } })();
+// ai đã góp ý chọn phương án gốc o của câu qid
+const whoPicked = (qid, o) => (NOTES[qid] || []).filter(x => x.pick === o).map(x => x.ten);
 function loadNotes(){
   const bank = B.id; NOTES = {}; notesState = "loading";
-  fetch(NOTE_API + "/notes?bank=" + bank).then(r => r.json()).then(d => {
+  fetch(NOTE_API + "/notes?bank=" + bank + "&vid=" + encodeURIComponent(VID)).then(r => r.json()).then(d => {
     if (B.id !== bank || !d.notes) return;
     d.notes.forEach(x => (NOTES[x.qid] = NOTES[x.qid] || []).push(x)); notesState = "ok";
     if (!$("quiz").classList.contains("hide") && S && S.mode === "learn" && S.items[S.i].pick !== null) render();
   }).catch(() => { notesState = "err"; });
+}
+// 👍 Đúng / 👎 Sai cho một góp ý; bấm lại nút đang chọn để bỏ vote
+function voteBar(x, redraw){
+  const bar = document.createElement("div"); bar.className = "cv";
+  const mk = (val, cls, label, n) => {
+    const b = document.createElement("button"); b.className = cls + (x.mine === val ? " on" : "");
+    b.textContent = label + " · " + (n || 0); b.title = val > 0 ? "Đồng ý góp ý này là đúng" : "Không đồng ý, góp ý này sai";
+    b.disabled = !VID;
+    b.onclick = () => {
+      const nv = x.mine === val ? 0 : val;
+      bar.querySelectorAll("button").forEach(e => e.disabled = true);
+      fetch(NOTE_API + "/vote", { method: "POST", headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ note_id: x.id, vid: VID, val: nv }) })
+        .then(r => r.json()).then(d => { if (d.error) throw new Error(d.error); x.up = d.up; x.down = d.down; x.mine = d.mine; redraw(); })
+        .catch(() => { bar.querySelectorAll("button").forEach(e => e.disabled = false); b.textContent = "Lỗi mạng, bấm lại"; });
+    };
+    return b;
+  };
+  bar.appendChild(mk(1, "up", "👍 Đúng", x.up));
+  bar.appendChild(mk(-1, "dn", "👎 Sai", x.down));
+  return bar;
 }
 function commBlock(it, withForm){
   const wrap = document.createElement("div");
@@ -513,14 +550,18 @@ function commBlock(it, withForm){
   if (list.length) {
     const h3 = document.createElement("h3"); h3.textContent = "Mọi người góp ý đáp án (" + list.length + ")"; c.appendChild(h3);
     const by = {}; list.forEach(x => (by[x.pick] = by[x.pick] || []).push(x));
+    const myO = it.pick !== null && it.pick !== undefined ? it.idx[it.pick] : null;
     Object.keys(by).sort((a, b) => by[b].length - by[a].length).forEach(pk => {
       const j = it.idx.indexOf(+pk), g = document.createElement("div"); g.className = "cg";
       const t = document.createElement("div"); t.className = "ct";
       t.textContent = "Chọn " + (j >= 0 ? L[j] : "?") + ". " + (it.q.o[pk] || "") + " ";
       const sp = document.createElement("span"); sp.textContent = "· " + by[pk].length + " người" + (it.q.a.includes(+pk) ? " · trùng đáp án đang dùng" : ""); t.appendChild(sp);
+      if (+pk === myO) { g.classList.add("mine"); const me = document.createElement("span"); me.className = "tagme"; me.textContent = "Bạn chọn trùng"; t.appendChild(me); }
       g.appendChild(t);
-      by[pk].forEach(x => { const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = x.ten + ": ";
-        p.appendChild(b); p.appendChild(document.createTextNode(x.giai)); g.appendChild(p); });
+      by[pk].forEach(x => { const cn = document.createElement("div"); cn.className = "cn";
+        const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = x.ten + ": ";
+        p.appendChild(b); p.appendChild(document.createTextNode(x.giai)); cn.appendChild(p);
+        cn.appendChild(voteBar(x, () => wrap.replaceWith(commBlock(it, withForm)))); g.appendChild(cn); });
       c.appendChild(g);
     });
   } else if (withForm && notesState === "err") {
@@ -550,7 +591,7 @@ function commBlock(it, withForm){
         .then(r => r.json()).then(d => {
           if (d.error) throw new Error(d.error);
           try { localStorage.setItem("lms_ten", body.ten); } catch(e) {}
-          (NOTES[it.q.n] = NOTES[it.q.n] || []).push({ id: d.id, qid: it.q.n, pick: body.pick, ten: body.ten, giai: body.giai });
+          (NOTES[it.q.n] = NOTES[it.q.n] || []).push({ id: d.id, qid: it.q.n, pick: body.pick, ten: body.ten, giai: body.giai, up: 0, down: 0, mine: 0 });
           wrap.replaceWith(commBlock(it, true));
         }).catch(e => { send.disabled = false; msg.className = "cm err"; msg.textContent = "Chưa gửi được: " + e.message; });
     };
@@ -579,7 +620,12 @@ function render(){
     const b = document.createElement("button"); b.className = "ans";
     b.innerHTML = '<span class="k">' + L[k] + '</span><span class="t"></span>'; b.querySelector(".t").textContent = it.q.o[o];
     if (reveal) { b.disabled = true;
-      if (it.q.a.includes(o)) b.classList.add("ok"); else if (k === it.pick) b.classList.add("bad"); else b.classList.add("dim"); }
+      if (it.q.a.includes(o)) b.classList.add("ok"); else if (k === it.pick) b.classList.add("bad"); else b.classList.add("dim");
+      const who = whoPicked(it.q.n, o);
+      if (who.length) { const w = document.createElement("span"); w.className = "who" + (k === it.pick ? " same" : "");
+        const names = who.slice(0, 3).join(", ") + (who.length > 3 ? " +" + (who.length - 3) : "");
+        w.textContent = k === it.pick ? "👥 Bạn chọn trùng với " + names : "👥 " + names + " chọn";
+        b.querySelector(".t").appendChild(w); if (k !== it.pick) b.classList.remove("dim"); } }
     else if (k === it.pick) b.classList.add("pick");
     b.onclick = () => choose(k); box.appendChild(b);
   });
