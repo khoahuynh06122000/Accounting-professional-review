@@ -65,6 +65,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .selbox .sech{margin:0 0 4px}
 .selq{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
 .selq button{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:20px;padding:6px 12px;font-size:13.5px;font-weight:600}
+.selq button.on{background:var(--accent);color:var(--on-accent)}
 .sets{display:grid;gap:6px}
 .setc{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--bg);color:var(--ink);border:1.5px solid transparent;border-radius:10px;padding:10px 12px;font-size:14.5px}
 .setc b{flex:1;font-weight:600}
@@ -237,7 +238,7 @@ details.cfg[open] summary::after{content:"−"}
 
   <div class="selbox hide" id="vhSel">
     <div class="sech"><h2>Tài liệu ôn</h2><span id="selSum"></span></div>
-    <div class="selq"><button id="selC3">Cấp 4: Chương 3 + Kiến thức chung</button><button id="selAll">Chọn tất cả</button></div>
+    <div class="selq"><button data-lv="4">Cấp 4: tất cả trừ Chương 4</button><button data-lv="3">Cấp 3: tất cả các bộ</button></div>
     <div class="sets" id="sets"></div>
   </div>
 
@@ -365,7 +366,9 @@ function loadBank(id){
   } catch(e) {}
   if (B === BANKS.vh) { if (P.de) { P.dk[VH_SETS.map(s => s.k).sort().join("|")] = P.de; delete P.de; }
     if (!Array.isArray(P.sel) || !P.sel.length) P.sel = VH_SETS.map(s => s.k);
-    if (!P.sel.includes(MUST)) P.sel.push(MUST); }
+    if (!P.sel.includes(MUST)) P.sel.push(MUST);
+    // nút "Cấp 4" cũ chỉ chọn Chương 3 + KTC; Cấp 4 thật thi mọi bộ trừ Chương 4
+    if (!P.lv4 && selKey() === "Chương 3|KTC") P.sel = LEVELS[4].slice(); P.lv4 = 1; }
   else if (!Array.isArray(P.part) || !P.part.length) P.part = ["CM"];
   P.wc = P.wc || {}; for (const n in P.st) if (P.st[n] === 0 && !P.wc[n]) P.wc[n] = 1;   // câu sai từ trước khi có bộ đếm
   document.querySelectorAll("#bank button").forEach(b => b.setAttribute("aria-selected", BANKS[b.dataset.b] === B));
@@ -389,8 +392,9 @@ function applySel(){
 const selKey = () => (B === BANKS.vh ? P.sel : P.part).slice().sort().join("|");
 document.querySelectorAll("#bank button").forEach(b => b.onclick = () => { loadBank(b.dataset.b); renderHome(); });
 function setSel(list){ P.sel = VH_SETS.map(s => s.k).filter(k => k === MUST || list.includes(k)); P.pos = 0; save(); applySel(); renderHome(); }
-$("selAll").onclick = () => setSel(VH_SETS.map(s => s.k));
-$("selC3").onclick = () => setSel(["Chương 3"]);
+/* chọn nhanh theo cấp: Cấp 4 thi mọi bộ trừ Chương 4, Cấp 3 thi tất cả */
+const LEVELS = { 4: VH_SETS.map(s => s.k).filter(k => k !== "Chương 4"), 3: VH_SETS.map(s => s.k) };
+document.querySelectorAll(".selq [data-lv]").forEach(b => b.onclick = () => setSel(LEVELS[b.dataset.lv]));
 
 /* ---- bộ đề kiểu thi lái xe: trộn câu các chủ đề theo tỉ lệ, cắt thành đề cố định (Văn hóa 50 câu, Chuyên môn 30 câu) ---- */
 function mixSets(sets, shuf){
@@ -420,6 +424,7 @@ function renderVH(){
     b.innerHTML = '<span class="bx" aria-hidden="true"></span><b></b><span>' + setCount(s.k) + ' câu</span>'; b.querySelector("b").textContent = s.name + (s.k === MUST ? " (bắt buộc)" : "");
     b.onclick = () => { if (s.k === MUST || (on && P.sel.length === 1)) return; setSel(on ? P.sel.filter(k => k !== s.k) : P.sel.concat(s.k)); };
     sb.appendChild(b); });
+  document.querySelectorAll(".selq [data-lv]").forEach(b => b.classList.toggle("on", LEVELS[b.dataset.lv].slice().sort().join("|") === selKey()));
   $("selSum").textContent = "Đang ôn " + P.sel.length + "/" + VH_SETS.length + " bộ · " + DATA.length + " câu"; }
   const res = P.dk[selKey()] || {}, box = $("decks"); box.innerHTML = ""; let passed = 0;
   DECKS.forEach((d, k) => { const r = res[k + 1], b = document.createElement("button");
