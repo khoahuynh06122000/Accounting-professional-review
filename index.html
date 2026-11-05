@@ -344,7 +344,7 @@ const BANKS = {
     scopes:[["LMS","câu đề LMS"],["BS","câu bổ sung"],["AI","câu mới (Claude giải)"],["TAM","câu đề c Tâm"]],
     parts:[["CM","Chuyên môn chung"],["BDS","Bất động sản"]], pass:0.9,
     topics:[["KT","Kế toán TT99 & BCTC"],["TNDN","Thuế TNDN"],["THUE","Thuế GTGT, TNCN & nhà thầu"],["HD","Hóa đơn"],["NB","Quy trình nội bộ"],["BDS","Bất động sản"]] },
-  vh: { data:VH, key:"vh_v1", small:"Sun Group · Văn hóa doanh nghiệp 2026", title:"Ôn tập Văn hóa – Nghị quyết 126", freq:false, exam:{num:50,min:30}, pass:0.9 }
+  vh: { data:VH, key:"vh_v1", small:"Sun Group · Văn hóa doanh nghiệp 2026", title:"Ôn tập Văn hóa – Nghị quyết 126", freq:false, exam:{num:40,min:30}, pass:0.9 }   // như thi thật: 40 câu / 30 phút
 };
 const MUST = "KTC";   // Kiến thức chung: cấp nào cũng thi nên luôn nằm trong phần ôn
 const setCount = k => VH.filter(q => q.p === k).length;
@@ -356,10 +356,10 @@ const curTopics = () => B === BANKS.vh ? VH_SETS.filter(s => P.sel.includes(s.k)
 let B, DATA, P, DECKS = [];
 function loadBank(id){
   B = BANKS[id] || BANKS.lms; B.id = BANKS[id] ? id : "lms"; loadNotes();
-  P = { st:{}, pos:0, exam:Object.assign({}, B.exam), dk:{} };
+  P = { st:{}, wc:{}, pos:0, exam:Object.assign({}, B.exam), dk:{} };
   try {
     const raw = localStorage.getItem(B.key);
-    if (raw) { P = Object.assign(P, JSON.parse(raw)); if (B.pass && (P.v || 0) < 2) { P.exam = Object.assign({}, B.exam); if (B === BANKS.lms) P.dk = {}; P.v = 2; } }
+    if (raw) { P = Object.assign(P, JSON.parse(raw)); const ov = P.v || 0; if (B.pass && ov < 3) { P.exam = Object.assign({}, B.exam); if (B === BANKS.vh || ov < 2) { P.dk = {}; delete P.de; } P.v = 3; } }
     else if (B === BANKS.lms) { const old = JSON.parse(localStorage.getItem("lms_wrong") || "[]"); old.forEach(n => P.st[n] = 0); }
     localStorage.setItem("lms_bank", id);
   } catch(e) {}
@@ -367,6 +367,7 @@ function loadBank(id){
     if (!Array.isArray(P.sel) || !P.sel.length) P.sel = VH_SETS.map(s => s.k);
     if (!P.sel.includes(MUST)) P.sel.push(MUST); }
   else if (!Array.isArray(P.part) || !P.part.length) P.part = ["CM"];
+  P.wc = P.wc || {}; for (const n in P.st) if (P.st[n] === 0 && !P.wc[n]) P.wc[n] = 1;   // câu sai từ trước khi có bộ đếm
   document.querySelectorAll("#bank button").forEach(b => b.setAttribute("aria-selected", BANKS[b.dataset.b] === B));
   $("hSmall").textContent = B.small; $("hTitle").textContent = B.title;
   $("cOrder").querySelector('[value="freq"]').hidden = !B.freq; if (!B.freq && $("cOrder").value === "freq") $("cOrder").value = "seq";
@@ -380,7 +381,7 @@ function applySel(){
     : B.scopes.map(([v,t]) => [v, DATA.filter(q => q.p === v).length + " " + t]).filter(([v,t]) => !t.startsWith("0 "));
   const T = DATA.length;
   $("cScope").innerHTML = '<option value="all">Toàn bộ ' + T + ' câu</option>' + scopes.map(([v,t]) => '<option value="' + v + '">' + t + '</option>').join("") +
-    '<option value="wrong">Câu đang sai</option><option value="new">Câu chưa thuộc</option>';
+    '<option value="wrong">Câu từng làm sai</option><option value="new">Câu chưa thuộc</option>';
   ["cNum","eNum"].forEach(id => $(id).max = T); $("cNum").value = T;
   const f = mixSets(curTopics(), false), m = Math.min(B.exam.num, f.length), n = Math.ceil(f.length / m);
   DECKS = Array.from({length:n}, (_, k) => Array.from({length:m}, (_, j) => f[(k * m + j) % f.length]));
@@ -437,7 +438,9 @@ function renderVH(){
     tp.appendChild(b); });
 }
 function save(){ try { localStorage.setItem(B.key, JSON.stringify(P)); } catch(e) {} }
-function mark(n, ok){ P.st[n] = ok ? 1 : 0; save(); }
+function mark(n, ok){ P.st[n] = ok ? 1 : 0; if (!ok) P.wc[n] = (P.wc[n] || 0) + 1; save(); }
+const wcOf = n => P.wc[n] || 0;   // số lần đã làm sai câu n
+const wrongEver = () => DATA.filter(q => wcOf(q.n) > 0);   // mục câu sai: đã sai một lần là giữ lại, làm lại đúng cũng không mất
 const known = () => DATA.filter(q => P.st[q.n] === 1);
 const wrong = () => DATA.filter(q => P.st[q.n] === 0);
 const notKnown = () => DATA.filter(q => P.st[q.n] !== 1);
@@ -452,8 +455,9 @@ function renderHome(){
   $("aSeqSub").textContent = P.pos > 0 && P.pos < T ? "Tiếp tục từ câu " + (P.pos+1) + "/" + T : "Bắt đầu từ câu 1, xem đáp án ngay sau mỗi câu";
   const nk = T-k; $("aNewSub").textContent = nk ? nk + " câu chưa làm hoặc làm sai, trộn ngẫu nhiên" : "Đã thuộc hết, rất tốt";
   $("aNew").disabled = !nk;
-  $("aWrongSub").textContent = w ? w + " câu đang làm sai" : "Chưa có câu sai";
-  $("aWrong").disabled = !w;
+  const we = wrongEver().length;
+  $("aWrongSub").textContent = we ? we + " câu từng làm sai" + (w ? " · " + w + " câu lần gần nhất vẫn sai" : " · lần gần nhất đều đã đúng") : "Chưa có câu sai";
+  $("aWrong").disabled = !we;
   $("eNum").value = P.exam.num; $("eMin").value = P.exam.min;
   $("aExamT").textContent = B.pass ? "Thi thử đề ngẫu nhiên" : "Thi thử";
   $("aExamSub").textContent = Math.min(P.exam.num, DATA.length) + " câu ngẫu nhiên" + (P.exam.min > 0 ? " · " + P.exam.min + " phút" : " · không giới hạn giờ") +
@@ -476,7 +480,7 @@ $("cReset").onclick = () => {
 function pool(s){
   if (DATA.some(q => q.p === s)) return DATA.filter(q => q.p === s);
   if (DATA.some(q => topicOf(q) === s)) return DATA.filter(q => topicOf(q) === s);
-  if (s === "wrong") return wrong(); if (s === "new") return notKnown();
+  if (s === "wrong") return wrongEver(); if (s === "new") return notKnown();
   return DATA.slice();
 }
 function shuffle(a){ for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -612,7 +616,8 @@ function render(){
     : '<span class="tag">Câu ' + it.q.n + (it.q.p === "BS" ? " · bổ sung" : it.q.p === "AI" ? " · Claude giải" : it.q.p === "TAM" ? " · đề c Tâm" : " · đề LMS") + '</span>';
   if (it.q.f >= 200) meta += '<span class="tag hot">Hay ra · ' + it.q.f + ' lần</span>';
   else if (it.q.f > 0) meta += '<span class="tag">Đã ra ' + it.q.f + ' lần</span>';
-  if (learn && st === 0 && it.pick === null) meta += '<span class="tag" style="background:var(--bad-soft);color:var(--bad)">Lần trước làm sai</span>';
+  const wc = wcOf(it.q.n);
+  if (wc) meta += '<span class="tag" style="background:var(--bad-soft);color:var(--bad)">Đã sai ' + wc + ' lần' + (st === 1 ? ' · lần gần nhất đúng' : '') + '</span>';
   $("qMeta").innerHTML = meta;
   $("qText").textContent = it.q.q;
   const box = $("qOpts"); box.innerHTML = "";
@@ -697,6 +702,7 @@ function renderReview(){
     if (only && isOk(it)) return;
     const d = document.createElement("div"); d.className = "rv";
     const q = document.createElement("div"); q.className = "q"; q.textContent = (k+1) + ". " + it.q.q; d.appendChild(q);
+    if (wcOf(it.q.n)) { const s = document.createElement("div"); s.className = "none"; s.textContent = "Đã sai " + wcOf(it.q.n) + " lần"; d.appendChild(s); }
     it.idx.forEach((o, j) => { const a = it.q.a.includes(o), p = j === it.pick;
       if (!a && !p) return;
       const l = document.createElement("div"); l.className = "l " + (a ? "ok" : "bad");
