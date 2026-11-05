@@ -340,7 +340,7 @@ const L = "ABCD";
 const $ = id => document.getElementById(id);
 /* ---- hai bộ đề: mỗi bộ có dữ liệu, phạm vi và tiến độ riêng ---- */
 const BANKS = {
-  lms: { data:LMS, key:"lms_v2", small:"Sun Group · Bài thi Chuyên môn", title:"Ôn thi Chuyên môn LMS", freq:true, exam:{num:30,min:30},
+  lms: { data:LMS, key:"lms_v2", small:"Sun Group · Bài thi Chuyên môn", title:"Ôn thi Chuyên môn LMS", freq:true, exam:{num:40,min:30},   // đề thi thật: 40 câu / 30 phút
     scopes:[["LMS","câu đề LMS"],["BS","câu bổ sung"],["AI","câu mới (Claude giải)"],["TAM","câu đề c Tâm"]],
     parts:[["CM","Chuyên môn chung"],["BDS","Bất động sản"]], pass:0.9,
     topics:[["KT","Kế toán TT99 & BCTC"],["TNDN","Thuế TNDN"],["THUE","Thuế GTGT, TNCN & nhà thầu"],["HD","Hóa đơn"],["NB","Quy trình nội bộ"],["BDS","Bất động sản"]] },
@@ -359,7 +359,7 @@ function loadBank(id){
   P = { st:{}, pos:0, exam:Object.assign({}, B.exam), dk:{} };
   try {
     const raw = localStorage.getItem(B.key);
-    if (raw) { P = Object.assign(P, JSON.parse(raw)); if (B.pass && !P.v) { P.exam = Object.assign({}, B.exam); P.v = 1; } }
+    if (raw) { P = Object.assign(P, JSON.parse(raw)); if (B.pass && (P.v || 0) < 2) { P.exam = Object.assign({}, B.exam); if (B === BANKS.lms) P.dk = {}; P.v = 2; } }
     else if (B === BANKS.lms) { const old = JSON.parse(localStorage.getItem("lms_wrong") || "[]"); old.forEach(n => P.st[n] = 0); }
     localStorage.setItem("lms_bank", id);
   } catch(e) {}
