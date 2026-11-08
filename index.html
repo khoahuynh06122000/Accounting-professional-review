@@ -173,7 +173,11 @@ details.cfg[open] summary::after{content:"−"}
 .ans.bad .k{background:var(--bad);border-color:var(--bad);color:#fff}
 .ans.dim{opacity:.55}
 .ans:disabled{cursor:default}
-.dock{position:sticky;bottom:0;z-index:5;background:var(--bg);margin:14px -16px 0;padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:grid;gap:10px}
+.dock{position:sticky;bottom:0;z-index:5;background:var(--bg);margin:14px -16px 0;padding:8px 16px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:grid;gap:8px}
+/* kết quả đúng/sai nằm ngay dưới đáp án; chừa chỗ cho thanh trên và thanh dưới khi tự cuộn tới */
+.qcard .verdict{padding:10px 12px;border-radius:10px}
+.qcard .verdict.ok{background:var(--ok-soft)} .qcard .verdict.bad{background:var(--bad-soft)}
+.qcard .ans,.qcard .verdict{scroll-margin:100px 0 80px}
 .verdict{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}
 .verdict.ok{color:var(--ok)} .verdict.bad{color:var(--bad)}
 .verdict:empty{display:none}
@@ -307,7 +311,6 @@ details.cfg[open] summary::after{content:"−"}
   </div>
   <div class="dock">
     <div class="confirm hide" id="cfm"><span id="cfmT"></span><div class="row2"><button class="btn" id="cfmY">Nộp bài</button><button class="btn line" id="cfmN">Làm tiếp</button></div></div>
-    <div class="verdict" id="qVerdict"></div>
     <div class="row2">
       <button class="btn line narrow" id="qPrev" aria-label="Câu trước">‹ Trước</button>
       <button class="btn soft narrow hide" id="qSubmit">Nộp bài</button>
@@ -644,9 +647,9 @@ function render(){
     else if (k === it.pick) b.classList.add("pick");
     b.onclick = () => choose(k); box.appendChild(b);
   });
-  const v = $("qVerdict"); v.className = "verdict"; v.textContent = "";
-  if (reveal) { if (isOk(it)) { v.classList.add("ok"); v.textContent = "✓ Chính xác"; }
-    else { v.classList.add("bad"); v.textContent = "✕ Chưa đúng · Đáp án đúng là " + L[it.idx.findIndex(o => it.q.a.includes(o))]; }
+  if (reveal) { const v = document.createElement("div"); v.id = "qVerdict"; v.className = "verdict " + (isOk(it) ? "ok" : "bad");
+    v.textContent = isOk(it) ? "✓ Chính xác" : "✕ Chưa đúng · Đáp án đúng là " + L[it.idx.findIndex(o => it.q.a.includes(o))];
+    box.appendChild(v);
     if (it.q.note) { const d = document.createElement("div"); d.className = "note2"; d.textContent = "Lưu ý: " + it.q.note; box.appendChild(d); }
     box.appendChild(commBlock(it, true)); }
   const lastQ = S.i === n-1;
@@ -667,6 +670,8 @@ function choose(k){
   const it = S.items[S.i];
   if (S.mode === "learn" && it.pick !== null) return;
   it.pick = k; if (S.mode === "learn") mark(it.q.n, isOk(it)); render();
+  if (S.mode === "learn") { const el = isOk(it) ? $("qVerdict") : $("qOpts").children[it.idx.findIndex(o => it.q.a.includes(o))];
+    if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
 function go(i){ S.i = i; render(); window.scrollTo(0,0); }
 $("qPrev").onclick = () => S.i > 0 && go(S.i-1);
@@ -741,7 +746,7 @@ let b0 = "lms"; try { b0 = localStorage.getItem("lms_bank") || "lms"; } catch(e)
 loadBank(b0);
 renderHome();
 /* ---- Phiên bản: thấy bản mới thì bấm để xoá cache + tải lại ---- */
-const APP_VER = 14;
+const APP_VER = 15;
 let verNew = 0;
 $("verCur").textContent = "v" + APP_VER;
 async function checkVer(){
