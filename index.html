@@ -428,7 +428,10 @@ const selKey = () => B === BANKS.lms && P.ktt ? "KTTH" :   // KTTH: đề KTT ne
  (B === BANKS.vh ? P.sel : P.part).slice().sort().join("|");
 /* đề Kế toán trưởng = đề KTT new (C Hà): các câu có trong file của C Hà, xếp theo thứ tự câu trong file (kt = số câu trong file) */
 const isKd = q => q.kd !== undefined || (q.kt && LMS.find(x => x.n === q.n).kd !== undefined);   // đáp án đề KTT new khác bộ chung
-const KTT = LMS.filter(q => q.kt).sort((a, b) => a.kt - b.kt).map(q => q.kd === undefined ? q : Object.assign({}, q, { a:[q.kd], kd:undefined, kdw:undefined, son:undefined,
+/* Kế toán trưởng học hết, không tách BĐS: câu BĐS trong đề KTT xếp về chủ đề chuyên môn tương ứng (theo số câu n trong bộ chung) */
+const KTT_TOPIC = { 67:"KT", 209:"KT", 236:"KT", 248:"KT", 250:"KT", 259:"KT", 129:"KT", 276:"KT",
+  244:"TNDN", 253:"TNDN", 138:"TNDN", 157:"TNDN", 257:"THUE", 265:"THUE", 150:"THUE", 149:"HD", 292:"NB", 293:"NB" };
+const KTT = LMS.filter(q => q.kt).sort((a, b) => a.kt - b.kt).map(q => Object.assign({}, q, { t:KTT_TOPIC[q.n] || q.t }, q.kd === undefined ? {} : { a:[q.kd], kd:undefined, kdw:undefined, son:undefined,
   wl:"Đáp án đề KTT new (C Hà)", why:"Đáp án theo đề KTT new (C Hà). Bộ Chuyên môn chung của app đang chọn: " + q.o[q.a[0]] }));
 document.querySelectorAll("#whoSel button").forEach(b => b.onclick = () => { const v = +b.dataset.w; if (!!P.ktt === !!v) return; P.ktt = v; P.pos = 0; save(); applySel(); renderHome(); });
 document.querySelectorAll("#bank button").forEach(b => b.onclick = () => { loadBank(b.dataset.b); renderHome(); });
@@ -451,7 +454,7 @@ function renderParts(){
   document.querySelectorAll("#whoSel button").forEach(b => b.classList.toggle("on", !!P.ktt === (b.dataset.w === "1")));
   $("parts").classList.toggle("hide", !!P.ktt); $("kttInfo").classList.toggle("hide", !P.ktt);
   if (P.ktt) { const kd = DATA.filter(isKd).length;
-    $("kttInfo").textContent = "Đề KTT new (C Hà): bộ đề Chuyên môn 2026 dành riêng Kế toán trưởng, thay cho đề KTT cũ. Xếp đúng thứ tự câu trong file (có cả " + DATA.filter(q => partOf(q) === "BDS").length + " câu BĐS), 2 câu lặp trong file chỉ tính một lần. " +
+    $("kttInfo").textContent = "Đề KTT new (C Hà): bộ đề Chuyên môn 2026 dành riêng Kế toán trưởng, thay cho đề KTT cũ. Học hết toàn bộ, không tách phần BĐS. Xếp đúng thứ tự câu trong file, 2 câu lặp trong file chỉ tính một lần. " +
       "Chấm theo đáp án của file" + (kd ? ", " + kd + " câu khác đáp án bộ Chuyên môn chung: lọc riêng ở Tùy chỉnh › Phạm vi câu hỏi." : ".");
     $("partSum").textContent = DATA.length + " câu"; return; }
   const box = $("parts"); box.innerHTML = "";
@@ -829,7 +832,7 @@ let b0 = "lms"; try { b0 = localStorage.getItem("lms_bank") || "lms"; } catch(e)
 loadBank(b0);
 renderHome();
 /* ---- Phiên bản: thấy bản mới thì bấm để xoá cache + tải lại ---- */
-const APP_VER = 18;
+const APP_VER = 19;
 let verNew = 0;
 $("verCur").textContent = "v" + APP_VER;
 async function checkVer(){
